@@ -49,7 +49,7 @@ describe 'AWS.EventListeners', ->
         expect(req).to.equal(request)
         throw "ERROR"
       response = request.send(->)
-      expect(response.error).to.equal("ERROR")
+      expect(response.error.message).to.equal("ERROR")
 
     it 'sends error event if credentials are not set', ->
       service.config.credentialProvider = null
@@ -111,37 +111,59 @@ describe 'AWS.EventListeners', ->
         expect(req).to.equal(request)
         throw "ERROR"
       response = request.send(->)
-      expect(response.error).to.equal("ERROR")
+      expect(response.error.message).to.equal("ERROR")
 
   describe 'afterBuild', ->
-    sendRequest = (body) ->
+    request = null
+    fs = null
+
+    sendRequest = (body, callback) ->
       request = makeRequest()
-      request.removeAllListeners('sign')
-      request.on('build', (req) -> req.httpRequest.body = body)
+      request.removeAllListeners 'sign'
+      request.on 'build', (req) -> req.httpRequest.body = body
+      if callback
+        request.send(callback)
+      else
+        request.send()
+        request
+
+    describe 'adds Content-Length header', ->
+      contentLength = (body) ->
+        sendRequest(body).httpRequest.headers['Content-Length']
+
+      it 'builds Content-Length in the request headers for string content', ->
+        expect(contentLength('FOOBAR')).to.equal(6)
+
+      it 'builds Content-Length for string "0"', ->
+        expect(contentLength('0')).to.equal(1)
+
+      it 'builds Content-Length for utf-8 string body', ->
+        expect(contentLength('tï№')).to.equal(6)
+
+      it 'builds Content-Length for buffer body', ->
+        expect(contentLength(new AWS.util.Buffer('tï№'))).to.equal(6)
+
+      if AWS.util.isNode()
+        it 'builds Content-Length for file body', (done) ->
+          fs = require('fs')
+          file = fs.createReadStream(__filename)
+          sendRequest file, (err) ->
+            done()
+
+  describe 'restart', ->
+    request = null
+
+    it 'constructs a fresh httpRequest object', ->
+      request = makeRequest()
+      httpRequest = request.httpRequest
+      request.on 'build', ->
+        if !@threwSimulatedError
+          @threwSimulatedError = true
+          err = new Error('simulated error')
+          err.retryable = true
+          throw err
       request.build()
-      request
-
-    contentLength = (body) ->
-      sendRequest(body).httpRequest.headers['Content-Length']
-
-    it 'builds Content-Length in the request headers for string content', ->
-      expect(contentLength('FOOBAR')).to.equal(6)
-
-    it 'builds Content-Length for string "0"', ->
-      expect(contentLength('0')).to.equal(1)
-
-    it 'builds Content-Length for utf-8 string body', ->
-      expect(contentLength('tï№')).to.equal(6)
-
-    it 'builds Content-Length for buffer body', ->
-      expect(contentLength(new AWS.util.Buffer('tï№'))).to.equal(6)
-
-    if AWS.util.isNode()
-      it 'builds Content-Length for file body', ->
-        fs = require('fs')
-        file = fs.createReadStream(__filename)
-        fileLen = fs.lstatSync(file.path).size
-        expect(contentLength(file)).to.equal(fileLen)
+      expect(request.httpRequest).not.to.eql(httpRequest)
 
   describe 'sign', ->
     it 'takes the request object as a parameter', ->
@@ -151,7 +173,7 @@ describe 'AWS.EventListeners', ->
         expect(req).to.equal(request)
         throw "ERROR"
       response = request.send(->)
-      expect(response.error).to.equal("ERROR")
+      expect(response.error.message).to.equal("ERROR")
 
     it 'uses the api.signingName if provided', ->
       helpers.mockHttpResponse 200, {}, ''
@@ -534,7 +556,7 @@ describe 'AWS.EventListeners', ->
             expect(-> request.send()).not.to.throw()
             expect(completeHandler.calls.length).not.to.equal(0)
             expect(retryHandler.calls.length).to.equal(0)
-            expect(result.name).to.equal('ReferenceError')
+            expect(result.code).to.equal('ReferenceError')
             d.exit()
 
         it 'does not leak service error into domain', ->
@@ -564,12 +586,12 @@ describe 'AWS.EventListeners', ->
             innerDomain = createDomain()
             innerDomain.enter()
             innerDomain.add(request)
-            innerDomain.on 'error', ->
+            innerDomain.on 'error', (domErr) ->
               gotInnerError = true
               expect(gotOuterError).to.equal(false)
               expect(gotInnerError).to.equal(true)
-              expect(err.domainThrown).to.equal(false)
-              expect(err.domain).to.equal(innerDomain)
+              expect(domErr.domainThrown).to.equal(false)
+              expect(domErr.domain).to.equal(innerDomain)
               done()
 
             request.send ->

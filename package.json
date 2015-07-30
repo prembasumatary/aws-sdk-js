@@ -1,7 +1,7 @@
 {
     "name": "aws-sdk",
     "description": "AWS SDK for JavaScript",
-    "version": "2.1.20",
+    "version": "2.1.41",
     "author": {
       "name":"Amazon Web Services",
       "email":"",
@@ -27,7 +27,8 @@
       "coveralls": "2.x"
     },
     "dependencies": {
-      "xml2js": "0.2.6",
+      "sax": "0.5.3",
+      "xml2js": "0.2.8",
       "xmlbuilder": "0.4.2"
     },
     "main": "lib/aws.js",
@@ -47,10 +48,7 @@
       "url" : "http://github.com/aws/aws-sdk-js/issues",
       "mail" : ""
     },
-    "licenses": [{
-      "type": "Apache 2.0",
-      "url": "http://github.com/aws/aws-sdk-js/raw/master/LICENSE.txt"
-    }],
+    "license": "Apache-2.0",
     "keywords": [
       "api", "amazon","aws","ec2","simpledb","s3","sqs","ses","sns","route53","rds","elasticache","cloudfront","fps",
       "cloudformation","cloudwatch","dynamodb","iam","swf","autoscaling","cloudsearch","elb",
